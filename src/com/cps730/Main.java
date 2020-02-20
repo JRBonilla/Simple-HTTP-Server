@@ -3,8 +3,8 @@ package com.cps730;
 public class Main {
 
     public static void main(String[] args) {
-        int port = 8080;
-        boolean debugging = false;
+        boolean debuggingOutput = false;
+        int port;
 
         // Parse command-line arguments
         try {
@@ -16,18 +16,18 @@ public class Main {
             }
 
             // Enable debugging output if specified
-            if (args.length > 3) {
+            if (args.length == 3) {
                 if (args[2].equals("-d")) {
-                    debugging = true;
+                    debuggingOutput = true;
                 } else {
-                    throw new IllegalArgumentException("Illegal Argument: Unknown argument!");
+                    throw new IllegalArgumentException("Illegal Argument: Unknown argument " + args[2] + "!");
                 }
             }
+
+            Server server = new Server(port, debuggingOutput);
         } catch (IndexOutOfBoundsException e) {
             // No arguments provided, print usage message.
             System.out.println("Usage: SimpleServer -p port [-d]");
         }
-
-        Server server = new Server(port);
     }
 }
