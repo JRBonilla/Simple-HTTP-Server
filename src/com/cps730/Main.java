@@ -3,15 +3,16 @@ package com.cps730;
 public class Main {
 
     public static void main(String[] args) {
-        boolean debuggingOutput = false;
         int port;
+        boolean debuggingOutput = false;
 
         // Parse command-line arguments
         try {
             // Parse port number
             if (args[0].equals("-p")) {
                 port = Integer.parseInt(args[1]);
-            } else {
+            }
+            else {
                 throw new IllegalArgumentException("Illegal Argument: First argument must be '-p [port]'!");
             }
 
@@ -19,7 +20,8 @@ public class Main {
             if (args.length == 3) {
                 if (args[2].equals("-d")) {
                     debuggingOutput = true;
-                } else {
+                }
+                else {
                     throw new IllegalArgumentException("Illegal Argument: Unknown argument " + args[2] + "!");
                 }
             }

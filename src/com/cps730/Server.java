@@ -3,7 +3,9 @@ package com.cps730;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.AccessDeniedException;
 import java.util.Date;
+import java.util.Objects;
 import java.util.StringTokenizer;
 
 public class Server {
@@ -15,7 +17,7 @@ public class Server {
     private static final String NOT_IMPLEMENTED = "501.html";
     private static final String HOME_PAGE       = "index.html";
     private static final Date   DATE            = new Date();
-    private static final File   WEB_ROOT        = new File(".");
+    private static final File   WEB_ROOT        = new File(Objects.requireNonNull(ParseWebRoot()));
 
     // Socket specific variables
     private ServerSocket         server     = null;
@@ -26,7 +28,7 @@ public class Server {
     private BufferedOutputStream dataOutput = null;
 
     // Constructor takes in port # and whether debugging output is enabled or not
-    public Server(int port, boolean debuggingOutput) {
+    public Server(int port, boolean debugging) {
         try {
             // Initialize server
             server = new ServerSocket(port);
@@ -49,9 +51,10 @@ public class Server {
                 StringTokenizer requestParser = new StringTokenizer(line);
                 String method = requestParser.nextToken().toUpperCase();
                 String requestURI = requestParser.nextToken().toLowerCase();
+                String version = requestParser.nextToken().toUpperCase();
 
                 // If debugging is enabled, print the request
-                if (debuggingOutput) {
+                if (debugging) {
                     System.out.println("-----------------------------------------------------------------------------");
                     while (!line.isEmpty()) {
                         System.out.println(line);
@@ -64,6 +67,10 @@ public class Server {
                 if (!method.equals("GET") && !method.equals("HEAD") && !method.equals("POST")) {
                     // Return the 501 Error page to the client
                     HTTPResponse501();
+                }
+                // Bad request submitted
+                else if (!requestURI.startsWith("/") && version.equals("HTTP/2.0")) {
+                    HTTPResponse400();
                 }
                 else {
                     // If only "/" is requested, redirect the user to index.html
@@ -84,6 +91,13 @@ public class Server {
 
                     }
                 }
+            }
+        } catch (AccessDeniedException e) {
+            try {
+                HTTPResponse403();
+            } catch (IOException i) {
+                System.out.println("Error: Could not send 403 message!");
+                System.out.println(e.getMessage());
             }
         } catch (FileNotFoundException e) {
             try {
@@ -157,6 +171,7 @@ public class Server {
         writer.flush();
     }
 
+    // OK response
     private void HTTPResponse200(File file) throws IOException {
         byte[] fileBytes = ReadFile(file, (int)file.length());
         String contentType = GetContentType(file.getName());
@@ -166,11 +181,12 @@ public class Server {
         dataOutput.flush();
     }
 
-    // TODO: Finish
+    // Created response
     private void HTTPResponse201(File file) throws IOException {
         GenerateHTTPResponse(201, GetContentType(file.getName()), (int)file.length());
     }
 
+    // Bad request error
     private void HTTPResponse400() throws IOException {
         File file = new File(WEB_ROOT, BAD_REQUEST);
         int length = (int) file.length();
@@ -182,6 +198,7 @@ public class Server {
         dataOutput.flush();
     }
 
+    // Forbidden error
     private void HTTPResponse403() throws IOException {
         File file = new File(WEB_ROOT, FORBIDDEN);
         int length = (int) file.length();
@@ -193,6 +210,7 @@ public class Server {
         dataOutput.flush();
     }
 
+    // File not found error
     private void HTTPResponse404() throws IOException {
         File file = new File(WEB_ROOT, NOT_FOUND);
         int length = (int) file.length();
@@ -204,6 +222,7 @@ public class Server {
         dataOutput.flush();
     }
 
+    // Method not implemented error
     private void HTTPResponse501() throws IOException {
         File file = new File(WEB_ROOT, NOT_IMPLEMENTED);
         int length = (int) file.length();
@@ -228,6 +247,25 @@ public class Server {
             }
         }
         return data;
+    }
+
+    // Parses the config file for the web root
+    private static String ParseWebRoot() {
+        try {
+            File file = new File("myhttpd.conf");
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+
+            String line = reader.readLine();
+            StringTokenizer tokenizer = new StringTokenizer(line);
+            String version = tokenizer.nextToken().toUpperCase();
+
+            System.out.println("Successfully loaded config file myhttpd.conf");
+            return tokenizer.nextToken().toLowerCase();
+        } catch (IOException e) {
+            System.out.println("Error: Could not load config file myhttpd.conf!");
+            System.out.println(e.getMessage());
+        }
+        return null;
     }
 
 }
