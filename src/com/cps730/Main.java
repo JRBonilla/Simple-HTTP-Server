@@ -9,12 +9,12 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.StringTokenizer;
+import java.util.*;
 
 public class Main {
+
+    private static boolean debuggingOutput = false;
+    private static ArrayList<String> FileTypes = new ArrayList<String>();
 
     private static final String BAD_REQUEST     = "html/400.html";
     private static final String FORBIDDEN       = "html/403.html";
@@ -22,7 +22,6 @@ public class Main {
     private static final String NOT_IMPLEMENTED = "html/501.html";
     private static final String HOME_PAGE       = "html/index.html";
     private static final String WEB_ROOT        = ParseWebRoot();
-    private static boolean debuggingOutput = false;
 
     public static void main(String[] args) throws IOException {
         int port = 0;
@@ -69,9 +68,17 @@ public class Main {
             String line = reader.readLine();
             StringTokenizer tokenizer = new StringTokenizer(line);
             String version = tokenizer.nextToken().toUpperCase();
+            String webRoot = tokenizer.nextToken().toLowerCase();
+
+            line = reader.readLine();
+            tokenizer = new StringTokenizer(line);
+            while (tokenizer.hasMoreTokens()) {
+                String fileType = tokenizer.nextToken();
+                FileTypes.add(fileType);
+            }
 
             System.out.println("Successfully loaded config file myhttpd.conf");
-            return tokenizer.nextToken().toLowerCase();
+            return webRoot;
         } catch (IOException e) {
             System.out.println("Error: Could not load config file myhttpd.conf!");
             System.out.println(e.getMessage());
@@ -122,10 +129,11 @@ public class Main {
 
         URI requestURI = exchange.getRequestURI();
         String requestPath = requestURI.getPath();
+
         String version = exchange.getProtocol().toUpperCase();
 
         // Bad request was made, send a 400 error
-        if (requestPath.startsWith("/") && version.equals("HTTP/2.0")) {
+        if (!requestPath.startsWith("/") && version.equals("HTTP/2.0")) {
             SendHTTPError(exchange, HttpURLConnection.HTTP_BAD_REQUEST, BAD_REQUEST);
         }
         else {
@@ -159,6 +167,18 @@ public class Main {
             System.out.println("Client accepted");
             PrintHTTPRequest(exchange);
         }
+        URI requestURI = exchange.getRequestURI();
+        String requestPath = requestURI.getPath();
+
+        if (requestPath.endsWith("/")) {
+            requestPath += HOME_PAGE;
+        }
+
+        File requestedFile = new File("." + WEB_ROOT, requestPath);
+        exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, (int) requestedFile.length());
+        OutputStream outputStream = exchange.getResponseBody();
+        outputStream.write(0);
+        outputStream.close();
     }
 
     // Handles HTTP POST requests
@@ -214,6 +234,22 @@ public class Main {
         requestHeaders.entrySet().forEach(System.out::println);
 
         System.out.println("-----------------------------------------------------------------------------------------");
+    }
+
+    // Checks if the file type is supported
+    private static boolean SupportedFileType(String fileType) {
+        for (String supported : FileTypes) {
+            if (fileType.equals(supported)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Returns the file extension
+    private static String GetFileExtension(String path) {
+        String file = path.substring(path.lastIndexOf("/"));
+        return file.substring(file.indexOf(".")).substring(1);
     }
 
 }
