@@ -7,7 +7,6 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 
@@ -133,7 +132,7 @@ public class Main {
         String version = exchange.getProtocol().toUpperCase();
 
         // Bad request was made, send a 400 error
-        if (!requestPath.startsWith("/") && version.equals("HTTP/2.0")) {
+        if (!requestPath.startsWith("/") || version.equals("HTTP/2.0")) {
             SendHTTPError(exchange, HttpURLConnection.HTTP_BAD_REQUEST, BAD_REQUEST);
         }
         else {
@@ -141,22 +140,27 @@ public class Main {
                 requestPath += HOME_PAGE;
             }
 
-            // The file was not found, so return a 404 error page
-            if (!Files.exists(Paths.get("." + requestPath))) {
-                SendHTTPError(exchange, HttpURLConnection.HTTP_NOT_FOUND, NOT_FOUND);
+            if (!SupportedFileType(GetFileExtension(requestPath))) {
+                SendHTTPError(exchange, HttpURLConnection.HTTP_BAD_REQUEST, BAD_REQUEST);
             }
-            // The file cannot be written to, so return a 403 error page
-            else if (!Files.isWritable(Paths.get("." + requestPath))) {
-                SendHTTPError(exchange, HttpURLConnection.HTTP_FORBIDDEN, FORBIDDEN);
-            }
-            // Otherwise, send the file and OK
             else {
-                File requestedFile = new File("." + WEB_ROOT, requestPath);
-                byte[] fileBytes = ReadFile(requestedFile, (int) requestedFile.length());
-                exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, fileBytes.length);
-                OutputStream outputStream = exchange.getResponseBody();
-                outputStream.write(fileBytes);
-                outputStream.close();
+                // The file was not found, so return a 404 error page
+                if (!Files.exists(Paths.get("." + requestPath))) {
+                    SendHTTPError(exchange, HttpURLConnection.HTTP_NOT_FOUND, NOT_FOUND);
+                }
+                // The file cannot be written to, so return a 403 error page
+                if (!Files.isWritable(Paths.get("." + requestPath))) {
+                    SendHTTPError(exchange, HttpURLConnection.HTTP_FORBIDDEN, FORBIDDEN);
+                }
+                // Otherwise, send the file and OK
+                else {
+                    File requestedFile = new File("." + WEB_ROOT, requestPath);
+                    byte[] fileBytes = ReadFile(requestedFile, (int) requestedFile.length());
+                    exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, fileBytes.length);
+                    OutputStream outputStream = exchange.getResponseBody();
+                    outputStream.write(fileBytes);
+                    outputStream.close();
+                }
             }
         }
     }
@@ -173,7 +177,7 @@ public class Main {
         String version = exchange.getProtocol().toUpperCase();
 
         // Bad request was made, send a 400 error
-        if (!requestPath.startsWith("/") && version.equals("HTTP/2.0")) {
+        if (!requestPath.startsWith("/") || version.equals("HTTP/2.0")) {
             SendHTTPError(exchange, HttpURLConnection.HTTP_BAD_REQUEST, BAD_REQUEST);
         }
         else {
@@ -181,22 +185,27 @@ public class Main {
                 requestPath += HOME_PAGE;
             }
 
-            // The file was not found, so return a 404 error page
-            if (!Files.exists(Paths.get("." + requestPath))) {
-                SendHTTPError(exchange, HttpURLConnection.HTTP_NOT_FOUND, NOT_FOUND);
+            if (!SupportedFileType(GetFileExtension(requestPath))) {
+                SendHTTPError(exchange, HttpURLConnection.HTTP_BAD_REQUEST, BAD_REQUEST);
             }
-            // The file cannot be written to, so return a 403 error page
-            else if (!Files.isWritable(Paths.get("." + requestPath))) {
-                SendHTTPError(exchange, HttpURLConnection.HTTP_FORBIDDEN, FORBIDDEN);
-            }
-            // Otherwise, send OK and no file
             else {
-                File requestedFile = new File("." + WEB_ROOT, requestPath);
-                byte[] fileBytes = ReadFile(requestedFile, (int) requestedFile.length());
-                exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, fileBytes.length);
-                OutputStream outputStream = exchange.getResponseBody();
-                outputStream.write(0);
-                outputStream.close();
+                // The file was not found, so return a 404 error page
+                if (!Files.exists(Paths.get("." + requestPath))) {
+                    SendHTTPError(exchange, HttpURLConnection.HTTP_NOT_FOUND, NOT_FOUND);
+                }
+                // The file cannot be written to, so return a 403 error page
+                else if (!Files.isWritable(Paths.get("." + requestPath))) {
+                    SendHTTPError(exchange, HttpURLConnection.HTTP_FORBIDDEN, FORBIDDEN);
+                }
+                // Otherwise, send OK and no file
+                else {
+                    File requestedFile = new File("." + WEB_ROOT, requestPath);
+                    byte[] fileBytes = ReadFile(requestedFile, (int) requestedFile.length());
+                    exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, fileBytes.length);
+                    OutputStream outputStream = exchange.getResponseBody();
+                    outputStream.write(0);
+                    outputStream.close();
+                }
             }
         }
     }
@@ -208,25 +217,36 @@ public class Main {
             PrintHTTPRequest(exchange);
         }
 
-        Headers requestHeaders = exchange.getRequestHeaders();
-        int contentLength = Integer.parseInt(requestHeaders.getFirst("Content-length"));
+        URI requestURI = exchange.getRequestURI();
+        String requestPath = requestURI.getPath();
 
-        InputStream inputStream = exchange.getRequestBody();
-        byte[] data = new byte[contentLength];
-        int length = inputStream.read(data);
+        String version = exchange.getProtocol().toUpperCase();
 
-        String[] dataString = new String(data).split("=");
-        String fileName = dataString[1];
-        File file = new File(fileName);
-        if (file.createNewFile()) {
-            if (debuggingOutput) {
-                System.out.println("Successfully created " + fileName);
+        // Bad request was made, send a 400 error
+        if (!requestPath.startsWith("/") || version.equals("HTTP/2.0")) {
+            SendHTTPError(exchange, HttpURLConnection.HTTP_BAD_REQUEST, BAD_REQUEST);
+        }
+        else {
+            Headers requestHeaders = exchange.getRequestHeaders();
+            int contentLength = Integer.parseInt(requestHeaders.getFirst("Content-length"));
+
+            InputStream inputStream = exchange.getRequestBody();
+            byte[] data = new byte[contentLength];
+            int length = inputStream.read(data);
+
+            String[] dataString = new String(data).split("=");
+            String fileName = dataString[1];
+            File file = new File(fileName);
+            if (file.createNewFile()) {
+                if (debuggingOutput) {
+                    System.out.println("Successfully created " + fileName);
+                }
+
+                exchange.sendResponseHeaders(HttpURLConnection.HTTP_CREATED, contentLength);
+                OutputStream outputStream = exchange.getResponseBody();
+                outputStream.write(data);
+                outputStream.close();
             }
-
-            exchange.sendResponseHeaders(HttpURLConnection.HTTP_CREATED, contentLength);
-            OutputStream outputStream = exchange.getResponseBody();
-            outputStream.write(data);
-            outputStream.close();
         }
     }
 
